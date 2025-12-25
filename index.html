@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pink Christmas Galaxy (Final Meteors)</title>
+    <title>Christmas Memory Galaxy - Final Pro</title>
     <link href="https://gs.jurieo.com/gemini/fonts-googleapis/css2?family=Great+Vibes&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
     
     <style>
@@ -50,10 +50,10 @@
 <body>
     <div id="ui-layer">
         <div class="title" id="main-title">Merry Christmas</div>
-        <div class="gesture-status" id="gesture-status">Wait for AI...</div>
+        <div class="gesture-status" id="gesture-status">AI Model Loading...</div>
         <div class="cam-controls">
             <video id="webcam" class="video-preview" autoplay playsinline></video>
-            <button id="camToggle" class="cam-btn">📷 ENABLE CAMERA</button>
+            <button id="camToggle" class="cam-btn">📷 ACTIVATE AI MAGIC</button>
         </div>
     </div>
     <audio id="bgm" loop src="https://music.163.com/song/media/outer/url?id=4875306.mp3"></audio>
@@ -70,59 +70,40 @@
         camera.position.set(0, 5, 22);
         const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.sortObjects = true;
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
         renderer.toneMapping = THREE.ReinhardToneMapping;
         document.body.appendChild(renderer.domElement);
+        
         const controls = new OrbitControls(camera, renderer.domElement);
-        controls.enableDamping = true; controls.autoRotate = true; controls.autoRotateSpeed = 0.8;
+        controls.enableDamping = true; 
+        controls.autoRotate = true; 
+        controls.autoRotateSpeed = 0.8;
 
         scene.add(new THREE.AmbientLight(0x442233));
         const pl = new THREE.PointLight(0xffb6c1, 3, 50); pl.position.set(5, 5, 5); scene.add(pl);
         const pl2 = new THREE.PointLight(0xff1493, 2, 50); pl2.position.set(-5, 0, -5); scene.add(pl2);
         const loader = new THREE.TextureLoader();
 
-        // ==================== 新增：流星系统 ====================
+        // --- 流星系统 ---
         const meteorCount = 20;
         const meteorGeo = new THREE.BufferGeometry();
         const meteorPos = new Float32Array(meteorCount * 3);
-        const meteorVel = []; // 存储每个流星的速度
+        const meteorVel = [];
+        for(let i=0; i<meteorCount; i++) resetMeteor(i, true);
         
-        // 初始化流星位置和速度
-        for(let i=0; i<meteorCount; i++) {
-            resetMeteor(i);
+        function resetMeteor(index, init = false) {
+            const i3 = index * 3;
+            meteorPos[i3] = (Math.random() - 0.5) * 100;
+            meteorPos[i3+1] = init ? (Math.random() * 100) : (Math.random() * 50 + 30);
+            meteorPos[i3+2] = (Math.random() - 0.5) * 100;
+            meteorVel[index] = new THREE.Vector3((Math.random() - 0.5) * 0.5, -(Math.random() * 1 + 0.5), (Math.random() - 0.5) * 0.5);
         }
         meteorGeo.setAttribute('position', new THREE.BufferAttribute(meteorPos, 3));
-        
-        // 使用拉伸的纹理来模拟流星拖尾
-        const meteorMat = new THREE.PointsMaterial({
-            color: 0xffffff,
-            size: 0.8,
-            transparent: true,
-            opacity: 0.6,
-            map: loader.load('https://assets.codepen.io/127738/dotTexture.png'), // 简单的光点纹理
-            blending: THREE.AdditiveBlending,
-            depthWrite: false
-        });
+        const meteorMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.8, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false });
         const meteorSystem = new THREE.Points(meteorGeo, meteorMat);
         scene.add(meteorSystem);
 
-        // 重置流星到顶部随机位置的函数
-        function resetMeteor(index) {
-            const i3 = index * 3;
-            meteorPos[i3] = (Math.random() - 0.5) * 100;   // X: 宽范围随机
-            meteorPos[i3+1] = Math.random() * 50 + 30;    // Y: 屏幕上方高处
-            meteorPos[i3+2] = (Math.random() - 0.5) * 100; // Z: 深范围随机
-            // 速度：快速向下，稍微向左/向右偏
-            meteorVel[index] = new THREE.Vector3(
-                (Math.random() - 0.5) * 0.5, 
-                -(Math.random() * 1 + 0.5), 
-                (Math.random() - 0.5) * 0.5
-            );
-        }
-        // ========================================================
-
-
-        // 双重粒子系统 (树 + 装饰)
+        // --- 双重粒子系统 (树 + 装饰) ---
         const treePinkPalette = [new THREE.Color('#ff99aa'), new THREE.Color('#ffcee0'), new THREE.Color('#ff7799')];
         const decoPalette = [new THREE.Color('#ff1493'), new THREE.Color('#FFD700'), new THREE.Color('#ffffff')];
 
@@ -172,52 +153,71 @@
 
         const singleGroup = new THREE.Group(); scene.add(singleGroup);
         for(let i=0; i<3; i++) {
-            const container = createPhotoFrame(myPhotos[i], i, 1.8); // 稍微放大一点
-            // === 核心修改：调整单张照片位置，使其完美居中 ===
-            // 位置调整为 (0, 0, 10)，更靠近相机中心线
-            container.position.set(0, 0, 10 - i * 0.01); 
-            container.lookAt(camera.position); 
+            const container = createPhotoFrame(myPhotos[i], i, 1.8);
+            // 单张照片居中位置
+            container.position.set(0, 0, 10); 
+            container.lookAt(0, 0, 20); 
             container.visible = false; singleGroup.add(container);
         }
 
         function createPhotoFrame(url, index, scale = 1) {
             const container = new THREE.Group();
             const frame = new THREE.Mesh(new THREE.BoxGeometry(3.2 * scale, 4 * scale, 0.1), frameMaterial.clone()); container.add(frame);
-            const tex = loader.load(url); tex.minFilter = THREE.LinearFilter;
+            const tex = loader.load(url);
             const photo = new THREE.Mesh(new THREE.PlaneGeometry(2.8 * scale, 2.8 * scale), new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0, depthWrite: false }));
             photo.position.z = 0.06; photo.userData = { isPhoto: true, index: index }; container.add(photo);
             return container;
         }
 
-        // --- AI 手势 ---
+        // --- AI 手势识别 (国内优化) ---
         let handLandmarker = undefined; let webcamRunning = false;
         let targetState = 'tree'; let galleryMode = 'none'; let targetSingleIndex = -1;
 
         const createHandLandmarker = async () => {
             try {
-                const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm");
-                handLandmarker = await HandLandmarker.createFromOptions(vision, { baseOptions: { modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`, delegate: "GPU" }, runningMode: "VIDEO", numHands: 1 });
+                // 使用 unpkg 镜像以适应国内网络
+                const vision = await FilesetResolver.forVisionTasks("https://unpkg.com/@mediapipe/tasks-vision@0.10.9/wasm");
+                handLandmarker = await HandLandmarker.createFromOptions(vision, { 
+                    baseOptions: { 
+                        modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`, 
+                        delegate: "GPU" 
+                    }, 
+                    runningMode: "VIDEO", numHands: 1 
+                });
                 document.getElementById('gesture-status').innerText = "AI Ready. Click Camera.";
-            } catch (e) { document.getElementById('gesture-status').innerText = "AI Failed"; }
+            } catch (e) { 
+                document.getElementById('gesture-status').innerText = "AI Failed. Check Connection.";
+                console.error("AI Load Error:", e);
+            }
         };
         createHandLandmarker();
 
         const video = document.getElementById("webcam"); const camBtn = document.getElementById("camToggle");
         camBtn.addEventListener("click", () => {
-            if (!handLandmarker) return;
-            if (webcamRunning) { webcamRunning = false; camBtn.innerText = "📷 ENABLE CAMERA"; video.style.display = "none"; video.srcObject.getTracks().forEach(t => t.stop()); }
-            else { webcamRunning = true; camBtn.innerText = "⏹ DISABLE CAMERA"; video.style.display = "block"; navigator.mediaDevices.getUserMedia({ video: true }).then((s) => { video.srcObject = s; video.addEventListener("loadeddata", predictWebcam); document.getElementById('bgm').play().catch(()=>{}); }); }
+            if (!handLandmarker) { alert("AI 正在加载，请稍候..."); return; }
+            if (webcamRunning) { 
+                webcamRunning = false; camBtn.innerText = "📷 ENABLE CAMERA"; video.style.display = "none"; 
+                video.srcObject.getTracks().forEach(t => t.stop()); 
+            } else {
+                webcamRunning = true; camBtn.innerText = "⏹ DISABLE CAMERA"; video.style.display = "block"; 
+                navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } }).then((s) => { 
+                    video.srcObject = s; video.addEventListener("loadeddata", predictWebcam); 
+                    document.getElementById('bgm').play().catch(()=>{}); 
+                }).catch(err => {
+                    alert("无法开启摄像头，请确保使用 HTTPS 访问并授予权限");
+                    webcamRunning = false;
+                });
+            }
         });
 
-        let lastVideoTime = -1;
         async function predictWebcam() {
             if (video.currentTime !== lastVideoTime && handLandmarker) {
                 lastVideoTime = video.currentTime; const result = handLandmarker.detectForVideo(video, performance.now());
-                if (result.landmarks.length > 0) detectGesture(result.landmarks[0]); else resetUI();
+                if (result.landmarks && result.landmarks.length > 0) detectGesture(result.landmarks[0]); else resetUI();
             }
             if (webcamRunning) requestAnimationFrame(predictWebcam);
         }
-
+        let lastVideoTime = -1;
         function resetUI() { document.getElementById('gesture-status').innerText = "Wait for Hand..."; document.getElementById('gesture-status').className = "gesture-status"; }
 
         function detectGesture(landmarks) {
@@ -238,49 +238,40 @@
             const time = clock.getElapsedTime();
             if(galleryMode !== 'single') controls.update(); 
 
-            // 更新顶部星星
             topStar.rotation.y = time * 0.5;
             topStar.visible = targetState === 'tree';
             topStar.position.y = 6.5 + Math.sin(time*2)*0.1;
 
-            // ==================== 更新流星 ====================
+            // 更新流星
             const mPositions = meteorSystem.geometry.attributes.position.array;
             for(let i=0; i<meteorCount; i++) {
                 const i3 = i*3;
-                // 更新位置
                 mPositions[i3] += meteorVel[i].x;
                 mPositions[i3+1] += meteorVel[i].y;
                 mPositions[i3+2] += meteorVel[i].z;
-                // 如果掉出边界，重置到顶部
-                if (mPositions[i3+1] < -30 || Math.abs(mPositions[i3]) > 100 || Math.abs(mPositions[i3+2]) > 100) {
-                    resetMeteor(i);
-                }
+                if (mPositions[i3+1] < -30) resetMeteor(i);
             }
             meteorSystem.geometry.attributes.position.needsUpdate = true;
-            // ==================================================
 
-            // 更新粒子位置 (Lerp)
+            // 更新粒子位置及星云流动
             const speed = 0.04;
             updateParticleSystem(treeSystem, treeOrig, treeExploded, speed);
             updateParticleSystem(decoSystem, decoOrig, decoExploded, speed * 1.1);
 
-            // ==================== 核心升级：星云流动 ====================
             if (targetState === 'exploded') {
-                // 缓慢旋转粒子系统，制造流动感
-                treeSystem.rotation.y += 0.0005;
-                decoSystem.rotation.y -= 0.0008; // 反向旋转增加层次感
+                treeSystem.rotation.y += 0.0008; // 增加背景星云旋转流动感
+                decoSystem.rotation.x += 0.0005;
+                decoSystem.rotation.y -= 0.0006;
             } else {
-                // 复原时缓慢停止旋转
                 treeSystem.rotation.y *= 0.95;
                 decoSystem.rotation.y *= 0.95;
             }
-            // ==========================================================
             
             document.getElementById('main-title').style.opacity = targetState === 'tree' ? 0.8 : 0;
 
             if (galleryMode === 'ring') ringGroup.rotation.y += 0.002;
             updateGroupVisibility(ringGroup, galleryMode === 'ring' ? -1 : -2);
-            // 确保单张照片面向相机
+            
             if (galleryMode === 'single') singleGroup.children.forEach(c => c.lookAt(camera.position));
             updateGroupVisibility(singleGroup, galleryMode === 'single' ? targetSingleIndex : -2);
 
@@ -289,11 +280,11 @@
 
         function updateParticleSystem(system, orig, exploded, speed) {
             const cur = system.geometry.attributes.position.array;
-            const count = cur.length / 3;
-            for(let i=0; i<count; i++) {
-                const i3 = i*3; let tx, ty, tz;
-                if (targetState === 'tree') { tx = orig[i3]; ty = orig[i3+1]; tz = orig[i3+2]; }
-                else { tx = exploded[i3]; ty = exploded[i3+1]; tz = exploded[i3+2]; }
+            for(let i=0; i<cur.length/3; i++) {
+                const i3 = i*3;
+                const tx = targetState === 'tree' ? orig[i3] : exploded[i3];
+                const ty = targetState === 'tree' ? orig[i3+1] : exploded[i3+1];
+                const tz = targetState === 'tree' ? orig[i3+2] : exploded[i3+2];
                 cur[i3] += (tx - cur[i3]) * speed; cur[i3+1] += (ty - cur[i3+1]) * speed; cur[i3+2] += (tz - cur[i3+2]) * speed;
             }
             system.geometry.attributes.position.needsUpdate = true;
@@ -316,7 +307,6 @@
         window.addEventListener('resize', () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth,window.innerHeight); });
     </script>
 </body>
-
 </html>
 
 
