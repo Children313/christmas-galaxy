@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pink Christmas Galaxy (Final Meteors)</title>
+    <link href="https://gs.jurieo.com/gemini/fonts-googleapis/css2?family=Great+Vibes&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #1a0510; font-family: 'Inter', sans-serif; }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+        .title {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-family: 'Great Vibes', cursive; font-size: clamp(4rem, 10vw, 8rem);
+            color: #E0BFB8; text-shadow: 0 0 20px rgba(224, 191, 184, 0.6);
+            opacity: 0.8; transition: opacity 0.5s; text-align: center; white-space: nowrap;
+        }
+        .cam-controls {
+            position: absolute; bottom: 20px; right: 20px; pointer-events: auto;
+            display: flex; flex-direction: column; align-items: flex-end; gap: 10px;
+        }
+        .cam-btn {
+            background: rgba(255, 200, 210, 0.1); border: 1px solid rgba(255, 200, 210, 0.3);
+            color: #ffecef; padding: 10px 20px; border-radius: 8px; cursor: pointer;
+            backdrop-filter: blur(5px); transition: all 0.3s; font-family: monospace; font-size: 14px;
+        }
+        .cam-btn:hover { background: rgba(255, 200, 210, 0.2); }
+        .video-preview {
+            width: 160px; height: 120px; background: #000; border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.2); object-fit: cover; transform: scaleX(-1); display: none;
+        }
+        .gesture-status {
+            position: absolute; top: 20px; left: 20px; color: #ffecef; font-family: monospace;
+            background: rgba(50,0,20,0.5); padding: 5px 10px; border-radius: 4px;
+            border-left: 3px solid #ff69b4; transition: all 0.3s;
+        }
+        .gesture-status.detected { border-color: #ff1493; color: #ffb6c1; }
+    </style>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.bootcdn.net/ajax/libs/three.js/0.160.0/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+            "@mediapipe/tasks-vision": "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.9/+esm"
+        }
+    }
+    </script>
+</head>
+<body>
+    <div id="ui-layer">
+        <div class="title" id="main-title">Merry Christmas</div>
+        <div class="gesture-status" id="gesture-status">Wait for AI...</div>
+        <div class="cam-controls">
+            <video id="webcam" class="video-preview" autoplay playsinline></video>
+            <button id="camToggle" class="cam-btn">📷 ENABLE CAMERA</button>
+        </div>
+    </div>
+    <audio id="bgm" loop src="https://music.163.com/song/media/outer/url?id=4875306.mp3"></audio>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
+
+        // 1. 初始化场景
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x220511, 0.025);
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 5, 22);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.sortObjects = true;
+        renderer.toneMapping = THREE.ReinhardToneMapping;
+        document.body.appendChild(renderer.domElement);
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true; controls.autoRotate = true; controls.autoRotateSpeed = 0.8;
+
+        scene.add(new THREE.AmbientLight(0x442233));
+        const pl = new THREE.PointLight(0xffb6c1, 3, 50); pl.position.set(5, 5, 5); scene.add(pl);
+        const pl2 = new THREE.PointLight(0xff1493, 2, 50); pl2.position.set(-5, 0, -5); scene.add(pl2);
+        const loader = new THREE.TextureLoader();
+
+        // ==================== 新增：流星系统 ====================
+        const meteorCount = 20;
+        const meteorGeo = new THREE.BufferGeometry();
+        const meteorPos = new Float32Array(meteorCount * 3);
+        const meteorVel = []; // 存储每个流星的速度
+        
+        // 初始化流星位置和速度
+        for(let i=0; i<meteorCount; i++) {
+            resetMeteor(i);
+        }
+        meteorGeo.setAttribute('position', new THREE.BufferAttribute(meteorPos, 3));
+        
+        // 使用拉伸的纹理来模拟流星拖尾
+        const meteorMat = new THREE.PointsMaterial({
+            color: 0xffffff,
+            size: 0.8,
+            transparent: true,
+            opacity: 0.6,
+            map: loader.load('https://assets.codepen.io/127738/dotTexture.png'), // 简单的光点纹理
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+        const meteorSystem = new THREE.Points(meteorGeo, meteorMat);
+        scene.add(meteorSystem);
+
+        // 重置流星到顶部随机位置的函数
+        function resetMeteor(index) {
+            const i3 = index * 3;
+            meteorPos[i3] = (Math.random() - 0.5) * 100;   // X: 宽范围随机
+            meteorPos[i3+1] = Math.random() * 50 + 30;    // Y: 屏幕上方高处
+            meteorPos[i3+2] = (Math.random() - 0.5) * 100; // Z: 深范围随机
+            // 速度：快速向下，稍微向左/向右偏
+            meteorVel[index] = new THREE.Vector3(
+                (Math.random() - 0.5) * 0.5, 
+                -(Math.random() * 1 + 0.5), 
+                (Math.random() - 0.5) * 0.5
+            );
+        }
+        // ========================================================
+
+
+        // 双重粒子系统 (树 + 装饰)
+        const treePinkPalette = [new THREE.Color('#ff99aa'), new THREE.Color('#ffcee0'), new THREE.Color('#ff7799')];
+        const decoPalette = [new THREE.Color('#ff1493'), new THREE.Color('#FFD700'), new THREE.Color('#ffffff')];
+
+        const treeCount = 4000; const treeGeom = new THREE.BufferGeometry();
+        const treePos = []; const treeOrig = []; const treeExploded = []; const treeColors = [];
+        for(let i=0; i<treeCount; i++){
+            const y = Math.random() * 12 - 6; const r = (6 - y) * 0.5 * Math.sqrt(Math.random()); const angle = Math.random() * Math.PI * 2;
+            const x = Math.cos(angle)*r*0.95; const z = Math.sin(angle)*r*0.95;
+            treePos.push(x, y, z); treeOrig.push(x, y, z);
+            const expR = 14 + Math.random() * 8; const expA = Math.random() * Math.PI * 2;
+            treeExploded.push(Math.cos(expA)*expR, (Math.random()-0.5)*8, Math.sin(expA)*expR);
+            const c = treePinkPalette[Math.floor(Math.random() * treePinkPalette.length)]; treeColors.push(c.r, c.g, c.b);
+        }
+        treeGeom.setAttribute('position', new THREE.Float32BufferAttribute(treePos, 3));
+        treeGeom.setAttribute('color', new THREE.Float32BufferAttribute(treeColors, 3));
+        const treeSystem = new THREE.Points(treeGeom, new THREE.PointsMaterial({ size: 0.15, vertexColors: true, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.9 }));
+        scene.add(treeSystem);
+
+        const decoCount = 600; const decoGeom = new THREE.BufferGeometry();
+        const decoPos = []; const decoOrig = []; const decoExploded = []; const decoColors = [];
+        for(let i=0; i<decoCount; i++){
+            const y = Math.random() * 11 - 5; const r = (6 - y) * 0.55 * Math.sqrt(Math.random()) + 0.2;
+            const angle = Math.random() * Math.PI * 2;
+            decoPos.push(Math.cos(angle)*r, y, Math.sin(angle)*r); decoOrig.push(Math.cos(angle)*r, y, Math.sin(angle)*r);
+            const expR = 16 + Math.random() * 10; const expA = Math.random() * Math.PI * 2;
+            decoExploded.push(Math.cos(expA)*expR, (Math.random()-0.5)*10, Math.sin(expA)*expR);
+            const c = decoPalette[Math.floor(Math.random() * decoPalette.length)]; decoColors.push(c.r, c.g, c.b);
+        }
+        decoGeom.setAttribute('position', new THREE.Float32BufferAttribute(decoPos, 3));
+        decoGeom.setAttribute('color', new THREE.Float32BufferAttribute(decoColors, 3));
+        const decoSystem = new THREE.Points(decoGeom, new THREE.PointsMaterial({ size: 0.35, vertexColors: true, blending: THREE.AdditiveBlending, transparent: true, opacity: 1.0 }));
+        scene.add(decoSystem);
+
+        const topStar = new THREE.Mesh(new THREE.OctahedronGeometry(0.8, 0), new THREE.MeshStandardMaterial({ color: 0xFFD700, emissive: 0x442200, roughness: 0.3, metalness: 0.8 }));
+        topStar.position.set(0, 6.5, 0); scene.add(topStar);
+
+        // --- 照片系统 ---
+        const frameMaterial = new THREE.MeshBasicMaterial({ color: 0xFFEEEE, transparent: true, opacity: 0, depthWrite: false });
+        const myPhotos = ['./img/photo10.jpg', './img/photo11.jpg', './img/photo12.jpg'];
+
+        const ringGroup = new THREE.Group(); scene.add(ringGroup);
+        for(let i=0; i<12; i++) {
+            const container = createPhotoFrame(myPhotos[i % 3], i % 3);
+            const angle = (i / 12) * Math.PI * 2; const radius = 10;
+            container.position.set(Math.cos(angle) * radius, 0, Math.sin(angle) * radius); container.lookAt(0, 0, 0); ringGroup.add(container);
+        }
+
+        const singleGroup = new THREE.Group(); scene.add(singleGroup);
+        for(let i=0; i<3; i++) {
+            const container = createPhotoFrame(myPhotos[i], i, 1.8); // 稍微放大一点
+            // === 核心修改：调整单张照片位置，使其完美居中 ===
+            // 位置调整为 (0, 0, 10)，更靠近相机中心线
+            container.position.set(0, 0, 10 - i * 0.01); 
+            container.lookAt(camera.position); 
+            container.visible = false; singleGroup.add(container);
+        }
+
+        function createPhotoFrame(url, index, scale = 1) {
+            const container = new THREE.Group();
+            const frame = new THREE.Mesh(new THREE.BoxGeometry(3.2 * scale, 4 * scale, 0.1), frameMaterial.clone()); container.add(frame);
+            const tex = loader.load(url); tex.minFilter = THREE.LinearFilter;
+            const photo = new THREE.Mesh(new THREE.PlaneGeometry(2.8 * scale, 2.8 * scale), new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0, depthWrite: false }));
+            photo.position.z = 0.06; photo.userData = { isPhoto: true, index: index }; container.add(photo);
+            return container;
+        }
+
+        // --- AI 手势 ---
+        let handLandmarker = undefined; let webcamRunning = false;
+        let targetState = 'tree'; let galleryMode = 'none'; let targetSingleIndex = -1;
+
+        const createHandLandmarker = async () => {
+            try {
+                const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm");
+                handLandmarker = await HandLandmarker.createFromOptions(vision, { baseOptions: { modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`, delegate: "GPU" }, runningMode: "VIDEO", numHands: 1 });
+                document.getElementById('gesture-status').innerText = "AI Ready. Click Camera.";
+            } catch (e) { document.getElementById('gesture-status').innerText = "AI Failed"; }
+        };
+        createHandLandmarker();
+
+        const video = document.getElementById("webcam"); const camBtn = document.getElementById("camToggle");
+        camBtn.addEventListener("click", () => {
+            if (!handLandmarker) return;
+            if (webcamRunning) { webcamRunning = false; camBtn.innerText = "📷 ENABLE CAMERA"; video.style.display = "none"; video.srcObject.getTracks().forEach(t => t.stop()); }
+            else { webcamRunning = true; camBtn.innerText = "⏹ DISABLE CAMERA"; video.style.display = "block"; navigator.mediaDevices.getUserMedia({ video: true }).then((s) => { video.srcObject = s; video.addEventListener("loadeddata", predictWebcam); document.getElementById('bgm').play().catch(()=>{}); }); }
+        });
+
+        let lastVideoTime = -1;
+        async function predictWebcam() {
+            if (video.currentTime !== lastVideoTime && handLandmarker) {
+                lastVideoTime = video.currentTime; const result = handLandmarker.detectForVideo(video, performance.now());
+                if (result.landmarks.length > 0) detectGesture(result.landmarks[0]); else resetUI();
+            }
+            if (webcamRunning) requestAnimationFrame(predictWebcam);
+        }
+
+        function resetUI() { document.getElementById('gesture-status').innerText = "Wait for Hand..."; document.getElementById('gesture-status').className = "gesture-status"; }
+
+        function detectGesture(landmarks) {
+            const isTipUp = (t, p) => landmarks[t].y < landmarks[p].y;
+            const fingersUp = [8, 12, 16, 20].filter(t => isTipUp(t, t-2)).length;
+            const s = document.getElementById('gesture-status'); s.className = "gesture-status detected";
+            if (fingersUp === 0) { s.innerText = "✊ FIST: TREE"; targetState = 'tree'; galleryMode = 'none'; }
+            else if (fingersUp === 1) { s.innerText = "☝️ ONE: Photo 1"; targetState = 'exploded'; galleryMode = 'single'; targetSingleIndex = 0; }
+            else if (fingersUp === 2) { s.innerText = "✌️ TWO: Photo 2"; targetState = 'exploded'; galleryMode = 'single'; targetSingleIndex = 1; }
+            else if (fingersUp === 3) { s.innerText = "🤟 THREE: Photo 3"; targetState = 'exploded'; galleryMode = 'single'; targetSingleIndex = 2; }
+            else if (fingersUp >= 4) { s.innerText = "🖐 OPEN: ALL ROTATING"; targetState = 'exploded'; galleryMode = 'ring'; }
+        }
+
+        // --- 动画循环 ---
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = clock.getElapsedTime();
+            if(galleryMode !== 'single') controls.update(); 
+
+            // 更新顶部星星
+            topStar.rotation.y = time * 0.5;
+            topStar.visible = targetState === 'tree';
+            topStar.position.y = 6.5 + Math.sin(time*2)*0.1;
+
+            // ==================== 更新流星 ====================
+            const mPositions = meteorSystem.geometry.attributes.position.array;
+            for(let i=0; i<meteorCount; i++) {
+                const i3 = i*3;
+                // 更新位置
+                mPositions[i3] += meteorVel[i].x;
+                mPositions[i3+1] += meteorVel[i].y;
+                mPositions[i3+2] += meteorVel[i].z;
+                // 如果掉出边界，重置到顶部
+                if (mPositions[i3+1] < -30 || Math.abs(mPositions[i3]) > 100 || Math.abs(mPositions[i3+2]) > 100) {
+                    resetMeteor(i);
+                }
+            }
+            meteorSystem.geometry.attributes.position.needsUpdate = true;
+            // ==================================================
+
+            // 更新粒子位置 (Lerp)
+            const speed = 0.04;
+            updateParticleSystem(treeSystem, treeOrig, treeExploded, speed);
+            updateParticleSystem(decoSystem, decoOrig, decoExploded, speed * 1.1);
+
+            // ==================== 核心升级：星云流动 ====================
+            if (targetState === 'exploded') {
+                // 缓慢旋转粒子系统，制造流动感
+                treeSystem.rotation.y += 0.0005;
+                decoSystem.rotation.y -= 0.0008; // 反向旋转增加层次感
+            } else {
+                // 复原时缓慢停止旋转
+                treeSystem.rotation.y *= 0.95;
+                decoSystem.rotation.y *= 0.95;
+            }
+            // ==========================================================
+            
+            document.getElementById('main-title').style.opacity = targetState === 'tree' ? 0.8 : 0;
+
+            if (galleryMode === 'ring') ringGroup.rotation.y += 0.002;
+            updateGroupVisibility(ringGroup, galleryMode === 'ring' ? -1 : -2);
+            // 确保单张照片面向相机
+            if (galleryMode === 'single') singleGroup.children.forEach(c => c.lookAt(camera.position));
+            updateGroupVisibility(singleGroup, galleryMode === 'single' ? targetSingleIndex : -2);
+
+            renderer.render(scene, camera);
+        }
+
+        function updateParticleSystem(system, orig, exploded, speed) {
+            const cur = system.geometry.attributes.position.array;
+            const count = cur.length / 3;
+            for(let i=0; i<count; i++) {
+                const i3 = i*3; let tx, ty, tz;
+                if (targetState === 'tree') { tx = orig[i3]; ty = orig[i3+1]; tz = orig[i3+2]; }
+                else { tx = exploded[i3]; ty = exploded[i3+1]; tz = exploded[i3+2]; }
+                cur[i3] += (tx - cur[i3]) * speed; cur[i3+1] += (ty - cur[i3+1]) * speed; cur[i3+2] += (tz - cur[i3+2]) * speed;
+            }
+            system.geometry.attributes.position.needsUpdate = true;
+        }
+
+        function updateGroupVisibility(group, targetIndex) {
+            group.children.forEach(container => {
+                const photoMesh = container.children.find(c => c.userData.isPhoto);
+                const frameMesh = container.children[0];
+                if (photoMesh && frameMesh) {
+                    const shouldShow = (targetIndex === -1) || (photoMesh.userData.index === targetIndex);
+                    const targetOpacity = shouldShow ? 1 : 0;
+                    photoMesh.material.opacity += (targetOpacity - photoMesh.material.opacity) * 0.1;
+                    frameMesh.material.opacity = photoMesh.material.opacity;
+                    container.visible = photoMesh.material.opacity > 0.01;
+                }
+            });
+        }
+        animate();
+        window.addEventListener('resize', () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth,window.innerHeight); });
+    </script>
+</body>
+</html>
